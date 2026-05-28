@@ -1,7 +1,7 @@
 package cromwell.backend.google.batch.util
 
 import com.google.cloud.batch.v1.AllocationPolicy.{Accelerator, AttachedDisk, Disk, ProvisioningModel}
-import com.google.cloud.batch.v1.Volume
+import com.google.cloud.batch.v1.{GCS, Volume}
 import cromwell.backend.google.batch.io.{DiskType, GcpBatchAttachedDisk, GcpBatchReferenceFilesDisk}
 import cromwell.backend.google.batch.models.{GcpBatchRuntimeAttributes, GpuResource}
 import wom.format.MemorySize
@@ -90,5 +90,14 @@ trait BatchUtilityConversions {
   // Create accelerators for GPUs
   def toAccelerator(gpuResource: GpuResource): Accelerator.Builder =
     Accelerator.newBuilder.setCount(gpuResource.gpuCount.value.toLong).setType(gpuResource.gpuType.toString)
+
+  def toGcsBucketMountPath(gcsPath: String): String =
+    s"${GcpBatchAttachedDisk.GcsMountPoint}/${gcsPath.stripPrefix("gs://")}"
+
+  def toGcsBucketVolume(gcsPath: String): Volume =
+    Volume.newBuilder
+      .setGcs(GCS.newBuilder().setRemotePath(gcsPath))
+      .setMountPath(toGcsBucketMountPath(gcsPath))
+      .build()
 
 }

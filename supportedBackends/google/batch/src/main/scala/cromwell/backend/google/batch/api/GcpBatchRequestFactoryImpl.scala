@@ -226,12 +226,13 @@ class GcpBatchRequestFactoryImpl()(implicit gcsTransferConfiguration: GcsTransfe
     val networkInterface = createNetwork(data = data)
     val networkPolicy = createNetworkPolicy(networkInterface.build())
     val allDisks = toDisks(allDisksToBeMounted)
+    val bucketVolumes = runtimeAttributes.gcsBuckets.map(toGcsBucketVolume).toList
     val allVolumes = toVolumes(allDisksToBeMounted) ::: createParameters.targetLogFile.map { targetLogFile =>
       Volume.newBuilder
         .setGcs(GCS.newBuilder().setRemotePath(targetLogFile.gcsBucket))
         .setMountPath(targetLogFile.mountPath)
         .build()
-    }.toList
+    }.toList ::: bucketVolumes
 
     val containerSetup: List[Runnable] = containerSetupRunnables(allVolumes)
     val localization: List[Runnable] = localizeRunnables(createParameters, allVolumes)

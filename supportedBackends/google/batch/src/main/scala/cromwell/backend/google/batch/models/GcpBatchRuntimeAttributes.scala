@@ -58,7 +58,8 @@ final case class GcpBatchRuntimeAttributes(cpu: Int Refined Positive,
                                            failOnStderr: Boolean,
                                            continueOnReturnCode: ContinueOnReturnCode,
                                            noAddress: Boolean,
-                                           checkpointFilename: Option[String]
+                                           checkpointFilename: Option[String],
+                                           gcsBuckets: Seq[String] = Seq.empty
 )
 
 object GcpBatchRuntimeAttributes {
@@ -92,6 +93,9 @@ object GcpBatchRuntimeAttributes {
 
   val CheckpointFileKey = "checkpointFile"
   private val checkpointFileValidationInstance = new StringRuntimeAttributesValidation(CheckpointFileKey).optional
+
+  val GcsBucketsKey = "gcsBuckets"
+  private val gcsBucketsValidationInstance = GcsBucketsValidation.optional
 
   private val MemoryDefaultValue = "2048 MB"
 
@@ -176,6 +180,7 @@ object GcpBatchRuntimeAttributes {
         memoryValidation(runtimeConfig),
         bootDiskSizeValidation(runtimeConfig),
         checkpointFileValidationInstance,
+        gcsBucketsValidationInstance,
         dockerValidation,
         containerValidation
       )
@@ -242,6 +247,9 @@ object GcpBatchRuntimeAttributes {
       RuntimeAttributesValidation.extract(memoryValidation(runtimeAttrsConfig), validatedRuntimeAttributes)
     val disks: Seq[GcpBatchAttachedDisk] =
       RuntimeAttributesValidation.extract(disksValidation(runtimeAttrsConfig), validatedRuntimeAttributes)
+    val gcsBuckets: Seq[String] = RuntimeAttributesValidation
+      .extractOption(gcsBucketsValidationInstance.key, validatedRuntimeAttributes)
+      .getOrElse(Seq.empty)
 
     new GcpBatchRuntimeAttributes(
       cpu = cpu,
@@ -257,7 +265,8 @@ object GcpBatchRuntimeAttributes {
       failOnStderr = failOnStderr,
       continueOnReturnCode = continueOnReturnCode,
       noAddress = noAddress,
-      checkpointFilename = checkpointFileName
+      checkpointFilename = checkpointFileName,
+      gcsBuckets = gcsBuckets
     )
   }
 
@@ -310,6 +319,27 @@ object DisksValidation extends RuntimeAttributesValidation[Seq[GcpBatchAttachedD
 
   override protected def missingValueMessage: String =
     s"Expecting $key runtime attribute to be a comma separated String or Array[String]"
+}
+
+object GcsBucketsValidation extends RuntimeAttributesValidation[Seq[String]] {
+  override def key: String = GcpBatchRuntimeAttributes.GcsBucketsKey
+
+  override def coercion: Iterable[WomType] = Set(WomStringType, WomArrayType(WomStringType))
+
+  override protected def validateValue: PartialFunction[WomValue, ErrorOr[Seq[String]]] = {
+    case WomString(s) => validateBucketPaths(s.split(",\\s*").toSeq)
+    case WomArray(womType, values) if womType.memberType == WomStringType =>
+      validateBucketPaths(values.map(_.valueString).toSeq)
+  }
+
+  private def validateBucketPaths(paths: Seq[String]): ErrorOr[Seq[String]] =
+    paths.toList.traverse[ErrorOr, String] { path =>
+      if (path.startsWith("gs://")) path.validNel
+      else s"gcsBuckets path must start with 'gs://', got: '$path'".invalidNel
+    }
+
+  override protected def missingValueMessage: String =
+    s"Expecting $key runtime attribute to be a comma-separated String or Array[String] of gs:// paths"
 }
 
 class BootDiskSizeValidation(runtimeConfig: Option[Config]) extends IntRuntimeAttributesValidation(BootDiskSizeKey) {
