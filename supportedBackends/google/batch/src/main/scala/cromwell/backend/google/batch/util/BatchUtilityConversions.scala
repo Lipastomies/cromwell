@@ -92,11 +92,11 @@ trait BatchUtilityConversions {
     Accelerator.newBuilder.setCount(gpuResource.gpuCount.value.toLong).setType(gpuResource.gpuType.toString)
 
   def toGcsBucketMountPath(gcsPath: String): String =
-    s"${GcpBatchAttachedDisk.GcsMountPoint}/${gcsPath.stripPrefix("gs://")}"
+    s"/mnt/user-buckets/${gcsPath.stripPrefix("gs://")}"
 
   def toGcsBucketVolume(gcsPath: String): Volume =
     Volume.newBuilder
-      .setGcs(GCS.newBuilder().setRemotePath(gcsPath))
+      .setGcs(GCS.newBuilder().setRemotePath(gcsPath.stripPrefix("gs://")))
       .setMountPath(toGcsBucketMountPath(gcsPath))
       .build()
 
